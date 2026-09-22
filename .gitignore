@@ -12,6 +12,9 @@ Desktop.ini
 # the local dev database — state on your machine, never in the repo
 .data/
 
+# ad-hoc local DB backups (e.g. .data-backup-20260922-111754/) — same reason
+.data-backup-*/
+
 # keep secrets out of the repo: your API key lives in an env var or an
 # untracked file, never in a tracked one
 .env
