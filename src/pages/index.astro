@@ -1,8 +1,38 @@
 ---
-import { listMessages } from "../lib/db";
+import { listTimetable } from "../lib/db";
+import { layoutDay } from "../lib/layout";
 import "../styles.css";
 
-const messages = listMessages();
+const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAY_START = 8 * 60; // 08:00
+const DAY_END = 18 * 60; // 18:00
+
+// Single source of truth for the whole grid's vertical scale: every other
+// pixel measurement on the page (day height, hour-gridline spacing, card
+// top/height) is derived from this one number, so they can't drift apart.
+// 1.6 gives a 60-minute session ~96px — enough for its four lines of text
+// without clipping.
+const PX_PER_MINUTE = 1.6;
+
+const sessions = listTimetable();
+
+const days = DAY_LABELS.map((label, dayOfWeek) => ({
+  label,
+  sessions: layoutDay(sessions.filter((s) => s.dayOfWeek === dayOfWeek)),
+}));
+
+function formatTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
+
+const hourMarks = Array.from(
+  { length: (DAY_END - DAY_START) / 60 + 1 },
+  (_, i) => DAY_START + i * 60,
+);
+const dayHeightPx = (DAY_END - DAY_START) * PX_PER_MINUTE;
+const hourHeightPx = 60 * PX_PER_MINUTE;
 ---
 
 <!doctype html>
@@ -10,43 +40,135 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>Your ANU timetable</title>
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/">Guestbook</a>
+    <nav class="site-nav" aria-label="site">
+      <a href="/">Timetable</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Guestbook</h1>
-      <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
+      <h1>Your ANU timetable</h1>
+      <p class="intro">
+        Pick your sessions directly on the timetable — no separate allocation
+        table to cross-reference. Solid cards are allocated to you; dashed
+        cards are open candidates you can select.
       </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
-      </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
+      <ul class="legend" aria-label="legend">
+        <li class="legend-item legend-available">Available</li>
+        <li class="legend-item legend-allocated">Allocated</li>
+        <li class="legend-item legend-full">Full</li>
       </ul>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div class="timetable-scroll">
+        <div class="timetable" style={`--day-height:${dayHeightPx}px; --hour-height:${hourHeightPx}px`}>
+          <div class="hour-axis">
+            <div class="hour-axis-spacer"></div>
+            <div class="hour-marks">
+              {
+                hourMarks.map((minute) => (
+                  <div class="hour-label" style={`top:${(minute - DAY_START) * PX_PER_MINUTE}px`}>
+                    {formatTime(minute)}
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+          {
+            days.map((day) => (
+              <div class="day-column">
+                <div class="day-heading">{day.label}</div>
+                <div class="day-body">
+                  {day.sessions.map((session) => {
+                    const top = (session.startMinutes - DAY_START) * PX_PER_MINUTE;
+                    const height = (session.endMinutes - session.startMinutes) * PX_PER_MINUTE;
+                    const width = 100 / session.columnCount;
+                    const left = session.column * width;
+                    const remaining = session.capacity - session.allocatedCount;
+                    const statusLabel =
+                      session.status === "allocated"
+                        ? "Allocated"
+                        : session.status === "full"
+                          ? "Full"
+                          : "Available";
+                    return (
+                      <button
+                        type="button"
+                        class={`session-card status-${session.status}`}
+                        style={`top:${top}px; height:${height}px; left:${left}%; width:${width}%; --course-color:${session.courseColor}`}
+                        data-session-id={session.id}
+                        disabled={session.status === "full"}
+                        aria-pressed={
+                          session.status === "full"
+                            ? undefined
+                            : session.status === "allocated"
+                              ? "true"
+                              : "false"
+                        }
+                        aria-label={`${session.courseCode} ${session.activityType}, ${formatTime(session.startMinutes)} to ${formatTime(session.endMinutes)}, ${session.location}, ${statusLabel}, ${remaining} of ${session.capacity} seats remaining`}
+                      >
+                        <span class="card-status">{statusLabel}</span>
+                        <span class="card-course">
+                          {session.courseCode} {session.activityType}
+                        </span>
+                        <span class="card-time">
+                          {formatTime(session.startMinutes)}–{formatTime(session.endMinutes)}
+                        </span>
+                        <span class="card-meta">
+                          {session.location} · {remaining}/{session.capacity} seats
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
     </main>
     <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
-      const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
+      // Progressive enhancement, guestbook-style: the grid above is already
+      // fully server-rendered with the correct state. This script only wires
+      // up the click → fetch → reload round trip; the server stays the only
+      // place that decides what "allocated" or "full" means.
+      const grid = document.querySelector(".timetable");
+      const status = document.querySelector("#status");
+
+      grid?.addEventListener("click", async (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
+          "button[data-session-id]",
+        );
+        if (!button || button.disabled) return;
+
+        const sessionId = Number(button.dataset.sessionId);
+        const isAllocated = button.getAttribute("aria-pressed") === "true";
+        button.disabled = true;
+
+        try {
+          const res = await fetch("/api/allocations", {
+            method: isAllocated ? "DELETE" : "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({ error: "unknown" }));
+            if (status) {
+              status.textContent =
+                body.error === "full"
+                  ? "That session just filled up — pick another."
+                  : body.error === "already-allocated"
+                    ? "You already hold a session for this activity — cancel it first."
+                    : "Couldn't save that. Try again.";
+            }
+            button.disabled = false;
+            return;
+          }
+          window.location.reload();
+        } catch {
+          if (status) status.textContent = "Network error — try again.";
+          button.disabled = false;
+        }
       });
     </script>
   </body>

@@ -7,7 +7,7 @@ body {
 }
 
 main {
-  max-width: 40rem;
+  max-width: 64rem;
   margin: 0 auto;
 }
 
@@ -15,26 +15,212 @@ a {
   color: #0b5fff;
 }
 
-form {
+.site-nav {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 1.25rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.site-nav a {
+  padding: 0.3rem 0.1rem;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.site-nav a:hover {
+  text-decoration: underline;
+}
+
+.site-nav a:focus-visible {
+  outline: 3px solid #0b5fff;
+  outline-offset: 2px;
+  border-radius: 0.15rem;
+}
+
+.intro {
+  max-width: 40rem;
+}
+
+.legend {
+  display: flex;
+  gap: 1.25rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.legend-item {
+  position: relative;
+  padding-inline-start: 1.4rem;
+}
+
+.legend-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.2rem;
+  border: 2px solid #4a4a4a;
+}
+
+.legend-available::before {
+  background: transparent;
+  border-style: dashed;
+}
+
+.legend-allocated::before {
+  background: #4a4a4a;
+}
+
+.legend-full::before {
+  background: repeating-linear-gradient(45deg, #ccc, #ccc 3px, #eee 3px, #eee 6px);
+}
+
+#status:empty {
+  display: none;
+}
+
+#status {
+  min-height: 1.5rem;
+  font-weight: 600;
+  color: #7a2b00;
+}
+
+.timetable-scroll {
+  overflow-x: auto;
+  padding-bottom: 1rem;
+}
+
+.timetable {
+  display: grid;
+  grid-template-columns: 4rem repeat(5, minmax(9rem, 1fr));
+  min-width: 50rem;
+  /* The day heading and the hour-axis spacer above the grid must be exactly
+     the same height, or 08:00 stops lining up with the day body's top edge.
+     One variable, two consumers below, instead of the same number typed
+     twice. --day-height and --hour-height come from index.astro, which
+     derives every pixel measurement on the page from one shared scale. */
+  --heading-height: 2.25rem;
+}
+
+.hour-axis {
+  display: flex;
+  flex-direction: column;
+}
+
+.hour-axis-spacer {
+  height: var(--heading-height);
+}
+
+.hour-marks {
+  position: relative;
+  height: var(--day-height);
+}
+
+.hour-label {
+  position: absolute;
+  right: 0.5rem;
+  transform: translateY(-0.6em);
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.day-column {
+  border-inline-start: 1px solid #ddd;
+}
+
+.day-heading {
+  height: var(--heading-height);
+  display: flex;
   align-items: center;
-  margin-block: 1.5rem;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #ddd;
 }
 
-input {
-  flex: 1;
-  min-width: 12rem;
-  padding: 0.4rem 0.6rem;
+.day-body {
+  position: relative;
+  height: var(--day-height);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    #eee 0,
+    #eee 1px,
+    transparent 1px,
+    transparent var(--hour-height)
+  );
+}
+
+.session-card {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.3rem 0.45rem;
   font: inherit;
+  font-size: 0.72rem;
+  text-align: start;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  border: 2px solid var(--course-color);
+  color: #1a1a1a;
 }
 
-button {
-  padding: 0.4rem 1rem;
-  font: inherit;
+/* Each line truncates on its own with an ellipsis rather than the whole
+   card clipping vertically — matters when two overlapping cards halve the
+   width, not when a normal 60-minute card has the full column to itself. */
+.session-card > span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-#messages {
-  padding-inline-start: 1.2rem;
+.session-card:focus-visible {
+  outline: 3px solid #0b5fff;
+  outline-offset: 1px;
+  z-index: 2;
+}
+
+.status-available {
+  background: color-mix(in srgb, var(--course-color) 12%, white);
+  border-style: dashed;
+}
+
+.status-allocated {
+  background: var(--course-color);
+  color: white;
+  border-style: solid;
+}
+
+.status-full {
+  background: repeating-linear-gradient(45deg, #e4e4e4, #e4e4e4 4px, #f2f2f2 4px, #f2f2f2 8px);
+  border-color: #999;
+  border-style: solid;
+  color: #555;
+  cursor: not-allowed;
+}
+
+.card-status {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+}
+
+.card-course {
+  font-weight: 600;
+}
+
+.card-meta {
+  font-size: 0.68rem;
+  opacity: 0.85;
 }
