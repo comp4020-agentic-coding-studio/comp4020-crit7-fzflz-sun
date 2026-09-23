@@ -10,8 +10,11 @@ const DAY_END = 18 * 60; // 18:00
 // Single source of truth for the whole grid's vertical scale: every other
 // pixel measurement on the page (day height, hour-gridline spacing, card
 // top/height) is derived from this one number, so they can't drift apart.
-// 1.6 gives a 60-minute session ~96px — enough for its four lines of text
-// without clipping.
+// 1.6 gives a 60-minute session ~96px — enough for its five lines of text
+// (status, course code, activity type, time, location/seats) at the card's
+// tightened line-height without clipping. Session cards use this as a
+// min-height, not a fixed height, so a card that's forced to wrap under a
+// narrow overlap column can still grow rather than clip.
 const PX_PER_MINUTE = 1.6;
 
 const sessions = listTimetable();
@@ -51,8 +54,8 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
       <h1>Your ANU timetable</h1>
       <p class="intro">
         Pick your sessions directly on the timetable — no separate allocation
-        table to cross-reference. Solid cards are allocated to you; dashed
-        cards are open candidates you can select.
+        table to cross-reference. Select a dashed session to allocate it;
+        select your solid allocated session again to remove it.
       </p>
       <ul class="legend" aria-label="legend">
         <li class="legend-item legend-available">Available</li>
@@ -60,7 +63,8 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
         <li class="legend-item legend-full">Full</li>
       </ul>
       <p id="status" role="status" aria-live="polite"></p>
-      <div class="timetable-scroll">
+      <p id="scroll-hint" class="scroll-hint">Swipe horizontally to see the whole week.</p>
+      <div class="timetable-scroll" aria-describedby="scroll-hint">
         <div class="timetable" style={`--day-height:${dayHeightPx}px; --hour-height:${hourHeightPx}px`}>
           <div class="hour-axis">
             <div class="hour-axis-spacer"></div>
@@ -91,11 +95,20 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
                         : session.status === "full"
                           ? "Full"
                           : "Available";
+                    // Spelled out in the label too, not just implied by
+                    // aria-pressed, so a screen-reader user hears how to act
+                    // on this card without depending on the intro paragraph.
+                    const actionHint =
+                      session.status === "allocated"
+                        ? "select again to cancel"
+                        : session.status === "full"
+                          ? "full, not selectable"
+                          : "select to allocate";
                     return (
                       <button
                         type="button"
                         class={`session-card status-${session.status}`}
-                        style={`top:${top}px; height:${height}px; left:${left}%; width:${width}%; --course-color:${session.courseColor}`}
+                        style={`top:${top}px; min-height:${height}px; left:${left}%; width:${width}%; --course-color:${session.courseColor}`}
                         data-session-id={session.id}
                         disabled={session.status === "full"}
                         aria-pressed={
@@ -105,12 +118,11 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
                               ? "true"
                               : "false"
                         }
-                        aria-label={`${session.courseCode} ${session.activityType}, ${formatTime(session.startMinutes)} to ${formatTime(session.endMinutes)}, ${session.location}, ${statusLabel}, ${remaining} of ${session.capacity} seats remaining`}
+                        aria-label={`${session.courseCode} ${session.activityType}, ${formatTime(session.startMinutes)} to ${formatTime(session.endMinutes)}, ${session.location}, ${statusLabel}, ${remaining} of ${session.capacity} seats remaining, ${actionHint}`}
                       >
                         <span class="card-status">{statusLabel}</span>
-                        <span class="card-course">
-                          {session.courseCode} {session.activityType}
-                        </span>
+                        <span class="card-course">{session.courseCode}</span>
+                        <span class="card-activity">{session.activityType}</span>
                         <span class="card-time">
                           {formatTime(session.startMinutes)}–{formatTime(session.endMinutes)}
                         </span>
@@ -144,6 +156,9 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
         const sessionId = Number(button.dataset.sessionId);
         const isAllocated = button.getAttribute("aria-pressed") === "true";
         button.disabled = true;
+        if (status) {
+          status.textContent = isAllocated ? "Removing allocation…" : "Saving allocation…";
+        }
 
         try {
           const res = await fetch("/api/allocations", {

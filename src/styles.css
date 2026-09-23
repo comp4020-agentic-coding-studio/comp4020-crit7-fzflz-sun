@@ -4,6 +4,16 @@ body {
   font-family: system-ui, sans-serif;
   line-height: 1.6;
   color: #1a1a1a;
+  /* .timetable-scroll is the one place that's meant to scroll horizontally
+     (see below); this is a backstop against the document itself ever
+     growing a horizontal scrollbar from something narrower than it. */
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 1rem;
+  }
 }
 
 main {
@@ -45,7 +55,8 @@ a {
 
 .legend {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
   list-style: none;
   padding: 0;
   margin: 0 0 1rem;
@@ -91,6 +102,23 @@ a {
   color: #7a2b00;
 }
 
+/* Hidden on desktop; the grid fits (or the user drags a visible scrollbar)
+   without it. Shown only under the mobile breakpoint below, where the grid
+   is wider than the viewport and a scrollbar alone is easy to miss on a
+   touch device. */
+.scroll-hint {
+  display: none;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+@media (max-width: 640px) {
+  .scroll-hint {
+    display: block;
+  }
+}
+
 .timetable-scroll {
   overflow-x: auto;
   padding-bottom: 1rem;
@@ -98,8 +126,8 @@ a {
 
 .timetable {
   display: grid;
-  grid-template-columns: 4rem repeat(5, minmax(9rem, 1fr));
-  min-width: 50rem;
+  grid-template-columns: 4rem repeat(5, minmax(11rem, 1fr));
+  min-width: 60rem;
   /* The day heading and the hour-axis spacer above the grid must be exactly
      the same height, or 08:00 stops lining up with the day body's top edge.
      One variable, two consumers below, instead of the same number typed
@@ -111,6 +139,16 @@ a {
 .hour-axis {
   display: flex;
   flex-direction: column;
+  /* Stays pinned to the left edge of .timetable-scroll's viewport as the
+     grid scrolls horizontally, so the time-of-day is still legible while
+     looking at Thursday or Friday. Needs an opaque background (matching
+     the page's own) so day columns scrolling underneath don't show through
+     as ghosted text, and a z-index above session cards so it paints over
+     them rather than being covered by them mid-scroll. */
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
 }
 
 .hour-axis-spacer {
@@ -141,7 +179,16 @@ a {
   justify-content: center;
   font-weight: 600;
   font-size: 0.9rem;
-  border-bottom: 1px solid #ddd;
+  /* Pinned to the top of the viewport as the page scrolls down, so an
+     afternoon session is still legible as "which weekday". Needs its own
+     opaque background and a z-index above the day body's cards: without
+     one, later-painted cards scrolling underneath would show through or
+     paint over this strip instead of appearing to slide beneath it. */
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #fff;
+  border-bottom: 2px solid #bbb;
 }
 
 .day-body {
@@ -166,6 +213,10 @@ a {
   padding: 0.3rem 0.45rem;
   font: inherit;
   font-size: 0.72rem;
+  /* Tighter than the page's own 1.6: five short label lines need to fit a
+     normal 60-minute card's height without clipping, and loose body-text
+     leading was the difference between fitting and not. */
+  line-height: 1.25;
   text-align: start;
   cursor: pointer;
   border-radius: 0.25rem;
@@ -173,10 +224,24 @@ a {
   color: #1a1a1a;
 }
 
-/* Each line truncates on its own with an ellipsis rather than the whole
-   card clipping vertically — matters when two overlapping cards halve the
-   width, not when a normal 60-minute card has the full column to itself. */
-.session-card > span {
+/* Course code, activity type and time must never be reduced to an ellipsis
+   — a clash is exactly the moment a student needs to tell sessions apart,
+   so these three wrap onto a second line under a narrow overlap column
+   instead of truncating. The card's height (min-height, not a fixed
+   height — see index.astro) can grow to fit that wrap. */
+.card-course,
+.card-activity,
+.card-time {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+/* Status and the location/seats line are the two fields it's acceptable to
+   truncate under an extreme narrow overlap: status is rarely long enough
+   to need it, and location/seats is genuinely secondary to knowing *which*
+   session and *when*. */
+.card-status,
+.card-meta {
   display: block;
   max-width: 100%;
   overflow: hidden;
@@ -196,9 +261,14 @@ a {
 }
 
 .status-allocated {
-  background: var(--course-color);
-  color: white;
+  /* A fixed, always-legible fill instead of the raw course colour: some
+     course colours (light greens, oranges) don't reliably contrast against
+     white card text. The course colour still shows, moved to the border
+     and a thicker left accent stripe instead of carrying the whole fill. */
+  background: #1f2937;
+  color: #fff;
   border-style: solid;
+  border-inline-start-width: 0.4rem;
 }
 
 .status-full {
@@ -218,6 +288,10 @@ a {
 
 .card-course {
   font-weight: 600;
+}
+
+.card-activity {
+  font-size: 0.68rem;
 }
 
 .card-meta {

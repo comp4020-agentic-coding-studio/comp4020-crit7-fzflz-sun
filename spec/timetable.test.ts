@@ -125,3 +125,64 @@ describe("timetable allocation", () => {
     expect(await res.json()).toEqual({ error: "full" });
   });
 });
+
+// WORKSHOP_B's card is untouched by every allocate/deallocate call above, so
+// it's a stable fixture for asserting on a single card's actual markup.
+function cardMarkup(html: string, sessionId: number): string {
+  const marker = `data-session-id="${sessionId}"`;
+  const start = html.indexOf(marker);
+  if (start === -1) throw new Error(`no card for session ${sessionId}`);
+  const cardStart = html.lastIndexOf("<button", start);
+  const cardEnd = html.indexOf("</button>", start) + "</button>".length;
+  return html.slice(cardStart, cardEnd);
+}
+
+describe("session card content", () => {
+  it("renders course code and activity type as separate text, not merged onto one line", async () => {
+    const html = await getHtml();
+    const card = cardMarkup(html, WORKSHOP_B);
+    // Split so each can carry its own wrap/truncation rule (see styles.css) —
+    // this pins down that the split actually happened, not just that the
+    // text is present somewhere.
+    expect(card).toContain('<span class="card-course">COMP3120</span>');
+    expect(card).toContain('<span class="card-activity">Workshop</span>');
+  });
+
+  it("keeps the full course/activity/time/location detail in aria-label after the markup split", async () => {
+    const html = await getHtml();
+    const card = cardMarkup(html, WORKSHOP_B);
+    expect(card).toContain("COMP3120 Workshop, 14:00 to 15:00");
+  });
+
+  it("sizes cards with min-height rather than a fixed height, so wrapped text can grow the card instead of clipping", async () => {
+    const html = await getHtml();
+    const card = cardMarkup(html, WORKSHOP_B);
+    const style = card.match(/style="([^"]*)"/)?.[1] ?? "";
+    expect(style).toContain("min-height:");
+    // A plain "height:" declaration would fight min-height and reintroduce
+    // clipping under wrapped text — only the min- form should be present.
+    expect(style).not.toContain(" height:");
+  });
+
+  it("associates the horizontal-scroll hint with the scrollable region via aria-describedby", async () => {
+    const html = await getHtml();
+    expect(html).toContain('id="scroll-hint"');
+    expect(html).toContain('aria-describedby="scroll-hint"');
+  });
+
+  it("tells the user in plain text how to allocate and how to cancel", async () => {
+    const html = await getHtml();
+    expect(html).toContain("Select a dashed session to allocate it");
+    expect(html).toContain("select your solid allocated session again to remove it");
+  });
+
+  it("spells out the available action in each card's aria-label, not just aria-pressed", async () => {
+    const html = await getHtml();
+    // LAB_B (id 5) is available and untouched by every allocate/deallocate
+    // call above; WORKSHOP_B (id 7) is the demo student's standing pick.
+    const available = cardMarkup(html, LAB_B);
+    const allocated = cardMarkup(html, WORKSHOP_B);
+    expect(available).toContain("select to allocate");
+    expect(allocated).toContain("select again to cancel");
+  });
+});
