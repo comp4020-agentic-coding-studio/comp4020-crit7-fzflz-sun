@@ -33,6 +33,29 @@ re-derive or "improve" them without being asked.
   timetable's vertical scale, re-check that a normal 60-minute session still
   shows all six without clipping.
 
+## Identity and authorisation rules
+
+- Every page and API route derives the caller's identity from
+  `context.locals.user` (set once per request by `src/middleware.ts` from
+  the session cookie) — **never** from a `userId`/`studentId` in a request
+  body or query string. A client cannot claim to be a different student by
+  changing what it sends.
+- `allocateSession`/`deallocateSession` (`src/lib/db.ts`) take the caller's
+  id as an explicit parameter and scope every read/write to it. Don't add a
+  code path that looks up or mutates an allocation by session id alone,
+  without also constraining by the caller's own id.
+- A student only ever sees candidate sessions for courses they're enrolled
+  in (`enrolments` table, joined in `listTimetable`) — enforced by the SQL
+  join itself, not filtered client-side afterwards. `allocateSession` must
+  keep re-checking enrolment server-side too, since a direct POST can name
+  any session id regardless of what the UI currently renders.
+- Session capacity is shared across every student; per-user state
+  (enrolment, which candidate is "mine") is not. Don't collapse these —
+  a fix to one must never leak into the other.
+- See `docs/DATABASE.md` for the full cookie → session → user resolution
+  and the allocate transaction's race-safety argument before changing
+  either.
+
 ## Database rules
 
 - SQLite (via `better-sqlite3` + Drizzle) is the **sole** source of truth.
@@ -49,6 +72,12 @@ re-derive or "improve" them without being asked.
   (a script, a test), it needs the same pragma or it enforces nothing.
 - Never edit the database file by hand and never manually touch the
   deployed Fly volume (`/data/app.db`) — state on it outlives every deploy.
+- Seeding (`runSeed` in `src/lib/seed.ts`) is a sequence of named,
+  `seed_state`-guarded steps, not an "if the table's empty" check. Adding
+  new seed data means adding a **new** step with a **new** key — never
+  change what an already-shipped step key does, or a database that already
+  recorded that key as applied will silently skip the new behaviour. See
+  `docs/DATABASE.md`'s "Seeding and upgrading" section.
 
 ## Deployment shape — do not change
 

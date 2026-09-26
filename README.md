@@ -52,36 +52,62 @@ group with several candidate times). The rule this prototype enforces:
 Sessions in *other* activity groups are never affected by a pick or a
 cancellation in this group.
 
+## Logging in, and what's really shared
+
+This is now a real multi-user demo, not a single fixed identity. `/login`
+has three pre-seeded demo accounts (`alice`, `ben`, `chen`, one shared demo
+password shown right there on the page) with real server-side password
+checking and persistent, expiring sessions — a cookie holds only a random
+token, never a user id, and the server looks up who that token belongs to
+on every request. Log in as one, pick a session, refresh, log out, log in
+as another: you'll see *their* enrolled courses and *their* own picks, not
+the previous student's. What genuinely carries across every logged-in
+student is seat capacity — one course's remaining seats is a shared number,
+so one student allocating into a near-full session is visible to every
+other student looking at the same session. Full detail on how a cookie
+resolves to a user, and how the capacity check stays race-safe when two
+students click at once, is in [`docs/DATABASE.md`](docs/DATABASE.md).
+
+Each student only ever sees candidate sessions for courses they're actually
+enrolled in — enrolment is seed data this round, not a registration flow a
+student can change themselves.
+
 ## How it's built
 
-The backend is Astro (server-rendered pages and API routes) with Drizzle ORM
-over a SQLite database (via `better-sqlite3`). The database is the single
-source of truth: every allocation is a row in the `allocations` table, the
-page is rendered from a fresh read of that table on every request, and there
-is no client-side state standing in for it. Allocating or cancelling a
-session is a real HTTP request to `/api/allocations`; the grid you see after
-a reload reflects exactly what's in the database, and this has been
-manually verified by allocating a session, reloading the page, and
-confirming the pick survives.
+The backend is Astro (server-rendered pages and API routes, with a
+middleware that resolves the session cookie once per request) and Drizzle
+ORM over a SQLite database (via `better-sqlite3`). The database is the
+single source of truth: every allocation is a row in the `allocations`
+table, scoped to the student who made it; the page is rendered from a fresh
+read of that table on every request, and there is no client-side state
+standing in for it. Allocating or cancelling a session is a real HTTP
+request to `/api/allocations`, authenticated by the session cookie — the
+grid you see after a reload reflects exactly what's in the database for
+*that* logged-in student, and this has been manually verified by logging in
+as two different students in two separate browser sessions, allocating a
+session as each, and confirming each sees only their own pick while the
+other's remaining-seat count visibly drops.
 
 ## Scope of this prototype
 
 This is deliberately small, built around exactly:
 
-- **One demo student.** There is no login and no real ANU identity —
-  every allocation in this prototype belongs to the same fixed demo user.
-- **One representative teaching week.** The seed data models one week's
-  worth of sessions across a handful of courses, enough to show every state
-  (available, allocated, full, hidden-by-pick, overlapping) at once — not a
-  full semester's timetable.
+- **Three demo students, one representative teaching week.** The seed data
+  models one week's worth of sessions across eight courses, enough to show
+  every state (available, allocated, full, hidden-by-pick, 2-way and 3-way
+  overlaps) at once — not a full semester's timetable, and not real ANU
+  accounts or real ANU data.
+- **Seed-time enrolment.** Who's enrolled in what is part of the seed data,
+  not something a student can change through the UI this round.
 
 This prototype explicitly does **not** implement:
 
 - A connection to any real ANU system or API — all data is local seed data.
-- Authentication, accounts, or more than one student.
+- Self-service registration, password reset, or account creation.
 - A waitlist for full sessions.
 - Full-semester functionality (recurring weeks, semester start/end dates,
   timezone handling, etc.).
+- Image upload or AI image generation.
 
 ## What "good" means here
 
@@ -92,9 +118,11 @@ hover or a screen-reader-only label that isn't also visible on the card
 itself. It means state genuinely persists in the database rather than being
 faked in the browser, and that the rules a real allocation system needs —
 one pick per activity group, no picking into a full session, hiding
-candidates that are no longer real choices — are enforced by the server on
-every request, not just suggested by the UI.
+candidates that are no longer real choices, one student never able to see
+or touch another's picks, capacity actually shared across everyone
+allocating into it — are enforced by the server on every request, not just
+suggested by the UI.
 
-It does not mean feature-complete: the explicit non-goals above (real ANU
-data, auth, waitlists, a full semester) are the acknowledged edges of what
-"good" covers in this pass.
+It does not mean feature-complete: the explicit non-goals above (a real ANU
+system connection, self-service registration, waitlists, a full semester)
+are the acknowledged edges of what "good" covers in this pass.
