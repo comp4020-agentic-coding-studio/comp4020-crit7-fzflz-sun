@@ -27,6 +27,8 @@ a {
 
 .site-nav {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 1.25rem;
   padding-bottom: 0.5rem;
   margin-bottom: 1rem;
@@ -47,6 +49,44 @@ a {
   outline: 3px solid #0b5fff;
   outline-offset: 2px;
   border-radius: 0.15rem;
+}
+
+.site-nav-user {
+  margin-inline-start: auto;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.logout-form {
+  margin: 0;
+}
+
+.logout-form button {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #999;
+  border-radius: 0.3rem;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+
+.logout-form button:hover {
+  background: #e8e8e8;
+}
+
+.logout-form button:focus-visible {
+  outline: 3px solid #0b5fff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .site-nav-user {
+    margin-inline-start: 0;
+    width: 100%;
+    order: 3;
+  }
 }
 
 .intro {
@@ -92,6 +132,33 @@ a {
   background: repeating-linear-gradient(45deg, #ccc, #ccc 3px, #eee 3px, #eee 6px);
 }
 
+.course-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+
+.course-legend-item {
+  position: relative;
+  padding-inline-start: 1.1rem;
+}
+
+.course-legend-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--course-color);
+  border: 1px solid #4a4a4a;
+}
+
 #status:empty {
   display: none;
 }
@@ -126,8 +193,8 @@ a {
 
 .timetable {
   display: grid;
-  grid-template-columns: 4rem repeat(5, minmax(11rem, 1fr));
-  min-width: 60rem;
+  grid-template-columns: 4rem repeat(5, minmax(13rem, 1fr));
+  min-width: 68rem;
   /* The day heading and the hour-axis spacer above the grid must be exactly
      the same height, or 08:00 stops lining up with the day body's top edge.
      One variable, two consumers below, instead of the same number typed
@@ -206,9 +273,12 @@ a {
 .session-card {
   position: absolute;
   box-sizing: border-box;
+  container-type: inline-size;
+  container-name: card;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  overflow: hidden;
   gap: 0.15rem;
   padding: 0.3rem 0.45rem;
   font: inherit;
@@ -225,15 +295,47 @@ a {
 }
 
 /* Course code, activity type and time must never be reduced to an ellipsis
-   — a clash is exactly the moment a student needs to tell sessions apart,
-   so these three wrap onto a second line under a narrow overlap column
-   instead of truncating. The card's height (min-height, not a fixed
-   height — see index.astro) can grow to fit that wrap. */
+   — a clash is exactly the moment a student needs to tell sessions apart.
+   The card's height is now fixed to its real duration (see index.astro:
+   height = (end - start) * PX_PER_MINUTE, no min-height), so instead of
+   wrapping onto a second line and risking a visual overflow past that real
+   time slot, a narrow overlap column shrinks these three down through the
+   container-query rules below rather than growing the card. */
 .card-course,
 .card-activity,
 .card-time {
   display: block;
   overflow-wrap: anywhere;
+}
+
+/* Below ~110px of card width (a 3-way overlap split in a day column) there
+   isn't room for five separate lines without wrapping. Drop the type scale
+   and merge course code + activity type onto one line — course/activity/
+   time are still shown in full, never truncated; only the line count
+   shrinks. */
+@container card (max-width: 110px) {
+  .session-card {
+    font-size: 0.62rem;
+    line-height: 1.15;
+    padding: 0.2rem 0.3rem;
+    gap: 0.05rem;
+  }
+
+  .card-course-activity {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+}
+
+/* Below ~70px there's only room for the fields CLAUDE.md requires to always
+   be visible (status, course, activity, time) — the secondary location/seat
+   count is dropped entirely rather than left as an unreadable ellipsis
+   sliver. */
+@container card (max-width: 70px) {
+  .card-meta {
+    display: none;
+  }
 }
 
 /* Status and the location/seats line are the two fields it's acceptable to
@@ -297,4 +399,124 @@ a {
 .card-meta {
   font-size: 0.68rem;
   opacity: 0.85;
+}
+
+/* --- Login page --- */
+
+.login-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 3rem;
+}
+
+.login-main {
+  max-width: 28rem;
+  width: 100%;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1.5rem 0;
+}
+
+.login-form label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.login-form input {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #999;
+  border-radius: 0.3rem;
+}
+
+.login-form input:focus-visible {
+  outline: 3px solid #0b5fff;
+  outline-offset: 1px;
+}
+
+.login-form button[type="submit"] {
+  margin-top: 1rem;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: #0b5fff;
+  color: #fff;
+  cursor: pointer;
+}
+
+.login-form button[type="submit"]:hover {
+  background: #094fd6;
+}
+
+.login-form button[type="submit"]:focus-visible {
+  outline: 3px solid #1a1a1a;
+  outline-offset: 2px;
+}
+
+.login-form button[type="submit"]:disabled {
+  background: #99b8f0;
+  cursor: wait;
+}
+
+.login-error {
+  min-height: 1.3rem;
+  margin: 0;
+  color: #b00020;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.login-error:empty {
+  display: none;
+}
+
+.demo-accounts {
+  border-top: 1px solid #ddd;
+  padding-top: 1rem;
+}
+
+.demo-accounts h2 {
+  font-size: 1rem;
+}
+
+.demo-account-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.demo-account-fill {
+  width: 100%;
+  text-align: start;
+  font: inherit;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 0.3rem;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+
+.demo-account-fill:hover {
+  background: #eee;
+}
+
+.demo-account-fill:focus-visible {
+  outline: 3px solid #0b5fff;
+  outline-offset: 1px;
+}
+
+.demo-username {
+  color: #666;
+  font-weight: 400;
 }

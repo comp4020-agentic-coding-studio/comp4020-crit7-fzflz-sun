@@ -3,6 +3,10 @@ import { listTimetable } from "../lib/db";
 import { layoutDay } from "../lib/layout";
 import "../styles.css";
 
+// Gated by src/middleware.ts: an unauthenticated request never reaches this
+// render (redirected to /login first), so locals.user is always set here.
+const user = Astro.locals.user!;
+
 const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const DAY_START = 8 * 60; // 08:00
 const DAY_END = 18 * 60; // 18:00
@@ -10,19 +14,25 @@ const DAY_END = 18 * 60; // 18:00
 // Single source of truth for the whole grid's vertical scale: every other
 // pixel measurement on the page (day height, hour-gridline spacing, card
 // top/height) is derived from this one number, so they can't drift apart.
-// 1.6 gives a 60-minute session ~96px — enough for its five lines of text
+// 1.8 gives a 60-minute session ~108px — enough for its five lines of text
 // (status, course code, activity type, time, location/seats) at the card's
-// tightened line-height without clipping. Session cards use this as a
-// min-height, not a fixed height, so a card that's forced to wrap under a
-// narrow overlap column can still grow rather than clip.
-const PX_PER_MINUTE = 1.6;
+// tightened line-height without clipping, even split three-wide. Session
+// cards use this as their actual height (not a min-height): a card's size
+// must always represent its real duration, so it never visually overflows
+// into a neighbouring time slot when content wraps under a narrow column —
+// see .session-card and its container-query compact mode in styles.css.
+const PX_PER_MINUTE = 1.8;
 
-const sessions = listTimetable();
+const sessions = listTimetable(user.id);
 
 const days = DAY_LABELS.map((label, dayOfWeek) => ({
   label,
   sessions: layoutDay(sessions.filter((s) => s.dayOfWeek === dayOfWeek)),
 }));
+
+const courseLegend = [...new Map(sessions.map((s) => [s.courseCode, s.courseColor])).entries()].sort(
+  ([a], [b]) => a.localeCompare(b),
+);
 
 function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -49,19 +59,36 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
     <nav class="site-nav" aria-label="site">
       <a href="/">Timetable</a>
       <a href="/readme/">About</a>
+      <span class="site-nav-user">Signed in as {user.displayName}</span>
+      <form method="post" action="/api/logout" class="logout-form">
+        <button type="submit">Log out</button>
+      </form>
     </nav>
     <main>
       <h1>Your ANU timetable</h1>
       <p class="intro">
         Pick your sessions directly on the timetable — no separate allocation
         table to cross-reference. Select a dashed session to allocate it;
-        select your solid allocated session again to remove it.
+        select your solid allocated session again to remove it. Only your own
+        enrolled courses are shown; seat counts are shared with every other
+        student.
       </p>
       <ul class="legend" aria-label="legend">
         <li class="legend-item legend-available">Available</li>
         <li class="legend-item legend-allocated">Allocated</li>
         <li class="legend-item legend-full">Full</li>
       </ul>
+      {
+        courseLegend.length > 0 && (
+          <ul class="course-legend" aria-label="your courses">
+            {courseLegend.map(([code, color]) => (
+              <li class="course-legend-item" style={`--course-color:${color}`}>
+                {code}
+              </li>
+            ))}
+          </ul>
+        )
+      }
       <p id="status" role="status" aria-live="polite"></p>
       <p id="scroll-hint" class="scroll-hint">Swipe horizontally to see the whole week.</p>
       <div class="timetable-scroll" aria-describedby="scroll-hint">
@@ -108,7 +135,7 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
                       <button
                         type="button"
                         class={`session-card status-${session.status}`}
-                        style={`top:${top}px; min-height:${height}px; left:${left}%; width:${width}%; --course-color:${session.courseColor}`}
+                        style={`top:${top}px; height:${height}px; left:${left}%; width:${width}%; --course-color:${session.courseColor}`}
                         data-session-id={session.id}
                         disabled={session.status === "full"}
                         aria-pressed={
@@ -121,8 +148,10 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
                         aria-label={`${session.courseCode} ${session.activityType}, ${formatTime(session.startMinutes)} to ${formatTime(session.endMinutes)}, ${session.location}, ${statusLabel}, ${remaining} of ${session.capacity} seats remaining, ${actionHint}`}
                       >
                         <span class="card-status">{statusLabel}</span>
-                        <span class="card-course">{session.courseCode}</span>
-                        <span class="card-activity">{session.activityType}</span>
+                        <span class="card-course-activity">
+                          <span class="card-course">{session.courseCode}</span>
+                          <span class="card-activity">{session.activityType}</span>
+                        </span>
                         <span class="card-time">
                           {formatTime(session.startMinutes)}–{formatTime(session.endMinutes)}
                         </span>
@@ -174,7 +203,11 @@ const hourHeightPx = 60 * PX_PER_MINUTE;
                   ? "That session just filled up — pick another."
                   : body.error === "already-allocated"
                     ? "You already hold a session for this activity — cancel it first."
-                    : "Couldn't save that. Try again.";
+                    : body.error === "not-enrolled"
+                      ? "You're not enrolled in this course."
+                      : body.error === "unauthenticated"
+                        ? "Your session has expired — reload to log in again."
+                        : "Couldn't save that. Try again.";
             }
             button.disabled = false;
             return;
