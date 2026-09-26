@@ -1,7 +1,8 @@
 import axe from "axe-core";
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, inject, it } from "vitest";
-import { ROUTES } from "./routes";
+import { login } from "./auth-helper";
+import { AUTH_ROUTES, ROUTES } from "./routes";
 
 // The invariants run against the RUNNING app — spec/global-setup.ts boots the
 // built server (dist/server/entry.mjs, the same artefact production runs) and
@@ -13,14 +14,14 @@ import { ROUTES } from "./routes";
 // file. The routes they cover come from spec/routes.ts; keep it current.
 const baseUrl = inject("baseUrl");
 
-for (const route of ROUTES) {
+function runInvariants(route: string, headers: () => HeadersInit | undefined) {
   describe(`invariants: ${route}`, () => {
     let status: number;
     let dom: JSDOM;
     let doc: Document;
 
     beforeAll(async () => {
-      const res = await fetch(new URL(route, baseUrl));
+      const res = await fetch(new URL(route, baseUrl), { headers: headers() });
       status = res.status;
       dom = new JSDOM(await res.text(), {
         url: new URL(route, baseUrl).href,
@@ -88,3 +89,22 @@ for (const route of ROUTES) {
     });
   });
 }
+
+for (const route of ROUTES) {
+  runInvariants(route, () => undefined);
+}
+
+// AUTH_ROUTES (just "/") require a logged-in session — nginx-model demo
+// account "alice" (see src/lib/seed.ts) logs in once here, and every route in
+// the list is fetched with her session cookie, same as ROUTES otherwise.
+describe("authenticated invariants", () => {
+  let cookie: string;
+
+  beforeAll(async () => {
+    cookie = await login(baseUrl, "alice");
+  });
+
+  for (const route of AUTH_ROUTES) {
+    runInvariants(route, () => ({ cookie }));
+  }
+});

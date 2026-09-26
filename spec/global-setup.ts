@@ -8,6 +8,7 @@ import type { TestProject } from "vitest/node";
 declare module "vitest" {
   export interface ProvidedContext {
     baseUrl: string;
+    dbPath: string;
   }
 }
 
@@ -28,12 +29,13 @@ export default async function setup(project: TestProject): Promise<() => void> {
     });
   });
 
+  const dbPath = join(mkdtempSync(join(tmpdir(), "spec-db-")), "test.db");
   const server = spawn("node", [entry], {
     env: {
       ...process.env,
       HOST: "127.0.0.1",
       PORT: String(port),
-      DATABASE_PATH: join(mkdtempSync(join(tmpdir(), "spec-db-")), "test.db"),
+      DATABASE_PATH: dbPath,
     },
     stdio: "ignore",
   });
@@ -54,6 +56,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
   }
 
   project.provide("baseUrl", baseUrl);
+  project.provide("dbPath", dbPath);
   return () => {
     server.kill();
   };

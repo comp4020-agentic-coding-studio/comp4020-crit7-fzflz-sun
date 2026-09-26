@@ -4,8 +4,8 @@ import Database from "better-sqlite3";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { seedIfEmpty } from "./seed";
-import { DEMO_USER_ID, activityGroups, allocations, courses, sessions } from "./schema";
+import { runSeed } from "./seed";
+import { activityGroups, allocations, courses, enrolments, sessions, users } from "./schema";
 
 // One SQLite file is the app's whole persistent state. In production
 // fly.toml points DATABASE_PATH at the machine's volume (/data), which is
@@ -30,7 +30,12 @@ export const db = drizzle(client);
 // run them from. The flow: edit src/lib/schema.ts, `pnpm db:generate`,
 // commit the migration it writes to drizzle/.
 migrate(db, { migrationsFolder: "./drizzle" });
-seedIfEmpty(db);
+// Idempotent, versioned seed/upgrade steps — see src/lib/seed.ts and
+// docs/DATABASE.md. Safe to run against an empty database or an
+// already-populated one (including the original single-user shape): each
+// step is guarded by a seed_state marker so nothing is duplicated and no
+// cancelled allocation is silently restored on a later restart.
+runSeed(db);
 
 export type SessionCard = {
   id: number;
@@ -52,13 +57,21 @@ export type SessionCard = {
 // or full) are no longer real choices for this student — showing them next
 // to the picked session is exactly the "map between timetable and options
 // table" friction this prototype exists to remove. So a group with a pick
-// shows only that session; a group with no pick shows every candidate.
+// shows only that session; a group with no pick shows every candidate. This
+// runs per caller, against their own `allocatedByMe` flag — two students
+// looking at the same activity group can see different things.
 function visibleForGroup(groupSessions: SessionCard[]): SessionCard[] {
   const picked = groupSessions.find((s) => s.allocatedByMe);
   return picked ? [picked] : groupSessions;
 }
 
-export function listTimetable(): SessionCard[] {
+// Only sessions belonging to a course the caller is enrolled in are ever
+// returned — enforced by the inner join on enrolments below, not filtered
+// out afterwards, so there's no path that accidentally leaks another
+// course's candidates. Capacity (`allocatedCount`) is still computed across
+// *every* student's allocations: seats are a shared resource, visibility
+// isn't.
+export function listTimetable(studentId: number): SessionCard[] {
   const rows = db
     .select({
       id: sessions.id,
@@ -72,11 +85,15 @@ export function listTimetable(): SessionCard[] {
       location: sessions.location,
       capacity: sessions.capacity,
       allocatedCount: sql<number>`(select count(*) from ${allocations} where ${allocations.sessionId} = ${sessions.id})`,
-      mine: sql<number>`(select count(*) from ${allocations} where ${allocations.sessionId} = ${sessions.id} and ${allocations.userId} = ${DEMO_USER_ID})`,
+      mine: sql<number>`(select count(*) from ${allocations} where ${allocations.sessionId} = ${sessions.id} and ${allocations.studentId} = ${studentId})`,
     })
     .from(sessions)
     .innerJoin(activityGroups, eq(sessions.activityGroupId, activityGroups.id))
     .innerJoin(courses, eq(activityGroups.courseId, courses.id))
+    .innerJoin(
+      enrolments,
+      and(eq(enrolments.courseId, courses.id), eq(enrolments.userId, studentId)),
+    )
     .orderBy(sessions.dayOfWeek, sessions.startMinutes)
     .all();
 
@@ -98,16 +115,42 @@ export function listTimetable(): SessionCard[] {
 
 export class AllocationError extends Error {}
 
-// At most one allocation per (demo user, activity group), enforced here and
-// backed by the DB's unique constraint. Picking a *different* session while
-// one is already held is refused rather than silently swapped — the UI's own
-// contract is "cancel your current pick, then choose another," so the two
-// don't collapse into one request. Picking the session you already hold is a
-// no-op, not an error: the click that got you here looks the same either way.
-export function allocateSession(sessionId: number): void {
+// At most one allocation per (student, activity group), enforced here and
+// backed by the DB's unique index on (student_id, activity_group_id).
+// Picking a *different* session while one is already held is refused rather
+// than silently swapped — the UI's own contract is "cancel your current
+// pick, then choose another," so the two don't collapse into one request.
+// Picking the session you already hold is a no-op, not an error: the click
+// that got you here looks the same either way.
+//
+// Enrolment, uniqueness-in-group and capacity are all checked inside this
+// one db.transaction(), which better-sqlite3 (and this whole call) runs
+// fully synchronously — Node's single-threaded event loop can't interleave
+// another request's JS in the middle of it, so two students racing for the
+// last seat can't both read "one seat free" before either writes: whichever
+// call's synchronous body runs first commits the seat, the second sees the
+// now-updated count and gets "full".
+export function allocateSession(studentId: number, sessionId: number): void {
   db.transaction((tx) => {
-    const session = tx.select().from(sessions).where(eq(sessions.id, sessionId)).get();
+    const session = tx
+      .select({
+        id: sessions.id,
+        activityGroupId: sessions.activityGroupId,
+        capacity: sessions.capacity,
+        courseId: activityGroups.courseId,
+      })
+      .from(sessions)
+      .innerJoin(activityGroups, eq(sessions.activityGroupId, activityGroups.id))
+      .where(eq(sessions.id, sessionId))
+      .get();
     if (!session) throw new AllocationError("not-found");
+
+    const enrolled = tx
+      .select()
+      .from(enrolments)
+      .where(and(eq(enrolments.userId, studentId), eq(enrolments.courseId, session.courseId)))
+      .get();
+    if (!enrolled) throw new AllocationError("not-enrolled");
 
     const currentInGroup = tx
       .select()
@@ -115,7 +158,7 @@ export function allocateSession(sessionId: number): void {
       .where(
         and(
           eq(allocations.activityGroupId, session.activityGroupId),
-          eq(allocations.userId, DEMO_USER_ID),
+          eq(allocations.studentId, studentId),
         ),
       )
       .get();
@@ -132,14 +175,23 @@ export function allocateSession(sessionId: number): void {
       .get();
     if ((occupied?.count ?? 0) >= session.capacity) throw new AllocationError("full");
 
+    const student = tx.select({ username: users.username }).from(users).where(eq(users.id, studentId)).get();
+
     tx.insert(allocations)
-      .values({ sessionId, activityGroupId: session.activityGroupId, userId: DEMO_USER_ID })
+      .values({
+        sessionId,
+        activityGroupId: session.activityGroupId,
+        studentId,
+        // The pre-auth column: kept NOT NULL for historical-shape reasons
+        // only (see schema.ts) and never read by app code after this point.
+        legacyUserId: student?.username ?? `user-${studentId}`,
+      })
       .run();
   });
 }
 
-export function deallocateSession(sessionId: number): void {
+export function deallocateSession(studentId: number, sessionId: number): void {
   db.delete(allocations)
-    .where(and(eq(allocations.sessionId, sessionId), eq(allocations.userId, DEMO_USER_ID)))
+    .where(and(eq(allocations.sessionId, sessionId), eq(allocations.studentId, studentId)))
     .run();
 }

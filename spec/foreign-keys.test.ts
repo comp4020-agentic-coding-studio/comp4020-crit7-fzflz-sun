@@ -31,7 +31,7 @@ describe("SQLite foreign key enforcement", () => {
     expect(() =>
       db
         .insert(allocations)
-        .values({ sessionId: 999_999, activityGroupId: 1, userId: "fk-test-orphan" })
+        .values({ sessionId: 999_999, activityGroupId: 1, legacyUserId: "fk-test-orphan" })
         .run(),
     ).toThrow(/FOREIGN KEY constraint failed/i);
   });
