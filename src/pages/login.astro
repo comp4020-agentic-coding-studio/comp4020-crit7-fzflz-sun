@@ -1,0 +1,117 @@
+---
+import { DEMO_PASSWORD } from "../lib/seed";
+import "../styles.css";
+
+const DEMO_ACCOUNTS = [
+  { username: "alice", label: "Alice Nguyen" },
+  { username: "ben", label: "Ben Carter" },
+  { username: "chen", label: "Chen Wei" },
+];
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in — Your ANU timetable</title>
+  </head>
+  <body class="login-body">
+    <nav class="site-nav" aria-label="site">
+      <a href="/">Timetable</a>
+      <a href="/readme/">About</a>
+    </nav>
+    <main class="login-main">
+      <h1>Log in</h1>
+      <p class="intro">
+        This is a demo of the ANU timetable prototype with three simulated
+        student accounts. <strong>None of this is real ANU data</strong> —
+        the courses, sessions, and accounts below are all made up for this
+        prototype. Do not reuse a real ANU password here.
+      </p>
+
+      <form id="login-form" class="login-form" novalidate>
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" required />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+
+        <p id="login-error" role="alert" class="login-error"></p>
+
+        <button type="submit" id="login-submit">Log in</button>
+      </form>
+
+      <section class="demo-accounts" aria-labelledby="demo-accounts-heading">
+        <h2 id="demo-accounts-heading">Demo accounts</h2>
+        <p>
+          All three share the password <code>{DEMO_PASSWORD}</code>. Click a
+          name to fill the form, then press Log in.
+        </p>
+        <ul class="demo-account-list">
+          {
+            DEMO_ACCOUNTS.map((account) => (
+              <li>
+                <button type="button" class="demo-account-fill" data-username={account.username}>
+                  {account.label} <span class="demo-username">({account.username})</span>
+                </button>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </main>
+    <script is:inline define:vars={{ demoPassword: DEMO_PASSWORD }}>
+      const form = document.querySelector("#login-form");
+      const usernameInput = document.querySelector("#username");
+      const passwordInput = document.querySelector("#password");
+      const errorEl = document.querySelector("#login-error");
+      const submitButton = document.querySelector("#login-submit");
+
+      document.querySelectorAll(".demo-account-fill").forEach((button) => {
+        button.addEventListener("click", () => {
+          usernameInput.value = button.dataset.username ?? "";
+          passwordInput.value = demoPassword;
+          usernameInput.focus();
+        });
+      });
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        errorEl.textContent = "";
+        submitButton.disabled = true;
+        submitButton.textContent = "Logging in…";
+
+        try {
+          const res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: usernameInput.value,
+              password: passwordInput.value,
+            }),
+          });
+
+          if (!res.ok) {
+            errorEl.textContent = "Incorrect username or password.";
+            submitButton.disabled = false;
+            submitButton.textContent = "Log in";
+            return;
+          }
+
+          window.location.href = "/";
+        } catch {
+          errorEl.textContent = "Network error — try again.";
+          submitButton.disabled = false;
+          submitButton.textContent = "Log in";
+        }
+      });
+    </script>
+  </body>
+</html>
