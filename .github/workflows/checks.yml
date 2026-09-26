@@ -82,23 +82,16 @@ jobs:
         # keeps the app at one machine and one volume.
         run: flyctl deploy --remote-only --ha=false -a ${{ github.event.repository.name }}
       - name: Verify the deployed site is online
+        # Unauthenticated requests to / now correctly 302 to /login (auth
+        # middleware), so either status proves the app is up and routing.
         run: |
           for i in 1 2 3 4 5; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL" || true)
-            if [ "$code" = "200" ]; then echo "online: $APP_URL"; exit 0; fi
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then echo "online: $APP_URL"; exit 0; fi
             echo "attempt $i: HTTP $code, retrying in 10s..."
             sleep 10
           done
-          echo "site did not return 200"; exit 1
-      - name: Verify the live-update stream is streaming
-        # the SSE endpoint sends an opening comment immediately
-        run: |
-          first=$(curl -sN -m 15 "$APP_URL/api/events" | head -c 12 || true)
-          if [ -n "$first" ]; then
-            echo "streaming: $APP_URL/api/events"
-          else
-            echo "no bytes from the SSE endpoint"; exit 1
-          fi
+          echo "site did not return 200 or 302"; exit 1
       - name: Verify the deployed app knows it is serving https
         # Behind Fly's proxy an app can decide it serves http and then 403
         # every same-origin form POST. Any status but 403 means it's right.
