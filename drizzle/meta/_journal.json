@@ -15,6 +15,13 @@
       "when": 1790039702301,
       "tag": "0001_calm_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790393068606,
+      "tag": "0002_complete_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }
