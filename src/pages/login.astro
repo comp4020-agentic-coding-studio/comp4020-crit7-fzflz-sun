@@ -7,6 +7,14 @@ const DEMO_ACCOUNTS = [
   { username: "ben", label: "Ben Carter" },
   { username: "chen", label: "Chen Wei" },
 ];
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
 ---
 
 <!doctype html>
@@ -14,71 +22,170 @@ const DEMO_ACCOUNTS = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Log in — Your ANU timetable</title>
+    <title>Sign in — Your ANU Timetable</title>
   </head>
-  <body class="login-body">
-    <nav class="site-nav" aria-label="site">
-      <a href="/">Timetable</a>
-      <a href="/readme/">About</a>
-    </nav>
+  <body class="login-page">
+    <header class="login-header">
+      <div class="login-header-inner">
+        <a class="login-brand" href="/">
+          <svg class="login-brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="2" y="2" width="9" height="9" rx="1.5"></rect>
+            <rect x="13" y="2" width="9" height="9" rx="1.5"></rect>
+            <rect x="2" y="13" width="9" height="9" rx="1.5"></rect>
+            <rect x="13" y="13" width="9" height="9" rx="1.5"></rect>
+          </svg>
+          <span class="login-brand-text">
+            Your ANU Timetable
+            <span class="login-brand-badge">Student Prototype</span>
+          </span>
+        </a>
+        <nav class="login-nav" aria-label="site">
+          <a href="/readme/">About</a>
+          <span class="login-nav-current" aria-current="page">Sign in</span>
+        </nav>
+      </div>
+    </header>
+
     <main class="login-main">
-      <h1>Log in</h1>
-      <p class="intro">
-        This is a demo of the ANU timetable prototype with three simulated
-        student accounts. <strong>None of this is real ANU data</strong> —
-        the courses, sessions, and accounts below are all made up for this
-        prototype. Do not reuse a real ANU password here.
-      </p>
+      <div class="login-shell">
+        <section class="login-intro">
+          <p class="login-eyebrow">Your week, simplified</p>
+          <h1 class="login-headline">A clearer way to plan your week.</h1>
+          <p class="login-lede">Choose your tutorials, labs and workshops directly on your timetable.</p>
+          <p class="login-sub-lede">See your options. Pick a session. Keep your week in view.</p>
 
-      <form id="login-form" class="login-form" novalidate>
-        <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" required />
-
-        <label for="password">Password</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-
-        <p id="login-error" role="alert" class="login-error"></p>
-
-        <button type="submit" id="login-submit">Log in</button>
-      </form>
-
-      <section class="demo-accounts" aria-labelledby="demo-accounts-heading">
-        <h2 id="demo-accounts-heading">Demo accounts</h2>
-        <p>
-          All three share the password <code>{DEMO_PASSWORD}</code>. Click a
-          name to fill the form, then press Log in.
-        </p>
-        <ul class="demo-account-list">
-          {
-            DEMO_ACCOUNTS.map((account) => (
-              <li>
-                <button type="button" class="demo-account-fill" data-username={account.username}>
-                  {account.label} <span class="demo-username">({account.username})</span>
-                </button>
+          <div class="week-preview" aria-hidden="true">
+            <ol class="week-preview-grid">
+              <li class="week-preview-day">
+                <p class="week-preview-day-label">Mon</p>
+                <div class="week-preview-slot week-preview-slot--open" style="height:2.4rem"></div>
+                <div class="week-preview-slot week-preview-slot--picked" style="height:3.2rem"></div>
               </li>
-            ))
-          }
-        </ul>
-      </section>
+              <li class="week-preview-day">
+                <p class="week-preview-day-label">Tue</p>
+                <div class="week-preview-slot week-preview-slot--open" style="height:3.6rem"></div>
+              </li>
+              <li class="week-preview-day">
+                <p class="week-preview-day-label">Wed</p>
+                <div class="week-preview-slot week-preview-slot--open" style="height:1.8rem"></div>
+                <div class="week-preview-slot week-preview-slot--open" style="height:1.8rem"></div>
+              </li>
+              <li class="week-preview-day">
+                <p class="week-preview-day-label">Thu</p>
+                <div class="week-preview-slot week-preview-slot--picked" style="height:2.8rem"></div>
+              </li>
+              <li class="week-preview-day">
+                <p class="week-preview-day-label">Fri</p>
+                <div class="week-preview-slot week-preview-slot--open" style="height:2.2rem"></div>
+                <div class="week-preview-slot week-preview-slot--open" style="height:2.2rem"></div>
+              </li>
+            </ol>
+            <ul class="week-preview-legend">
+              <li class="week-preview-legend-item week-preview-legend-item--open">Available</li>
+              <li class="week-preview-legend-item week-preview-legend-item--picked">Allocated</li>
+            </ul>
+          </div>
+          <p class="week-preview-caption">Illustrative preview — not real course data.</p>
+        </section>
+
+        <section class="login-card-wrap" aria-label="sign in">
+          <div class="login-card">
+            <p class="login-card-eyebrow">Student sign in</p>
+            <h2 class="login-card-title">Welcome back</h2>
+            <p class="login-card-subtitle">Sign in to plan your week.</p>
+
+            <form id="login-form" class="login-form" novalidate>
+              <div class="login-field">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" autocomplete="username" required />
+              </div>
+
+              <div class="login-field">
+                <label for="password">Password</label>
+                <div class="login-password-field">
+                  <input id="password" name="password" type="password" autocomplete="current-password" required />
+                  <button
+                    type="button"
+                    id="password-toggle"
+                    class="login-password-toggle"
+                    aria-pressed="false"
+                    aria-label="Show password"
+                  >
+                    Show
+                  </button>
+                </div>
+              </div>
+
+              <p id="login-error" role="alert" class="login-error"></p>
+
+              <button type="submit" id="login-submit" class="login-submit">Sign in</button>
+            </form>
+
+            <div class="login-demo">
+              <div class="login-demo-divider"><span>Try a demo student</span></div>
+              <p class="login-demo-hint">Choose a student to fill in the demo credentials.</p>
+              <ul class="login-demo-list">
+                {
+                  DEMO_ACCOUNTS.map((account) => (
+                    <li>
+                      <button
+                        type="button"
+                        class="login-demo-account"
+                        data-username={account.username}
+                        data-label={account.label}
+                      >
+                        <span class="login-demo-avatar" aria-hidden="true">
+                          {initials(account.label)}
+                        </span>
+                        <span class="login-demo-name">
+                          {account.label}
+                          <span class="login-demo-username">{account.username}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                }
+              </ul>
+              <p class="login-demo-password">
+                Demo password for all three: <code>{DEMO_PASSWORD}</code>
+              </p>
+              <p id="demo-fill-status" class="login-demo-status" role="status" aria-live="polite"></p>
+            </div>
+
+            <p class="login-footnote">
+              Independent student prototype. Courses and accounts are simulated.<br />
+              Use demo credentials only — not your ANU password.
+            </p>
+          </div>
+        </section>
+      </div>
     </main>
+
     <script is:inline define:vars={{ demoPassword: DEMO_PASSWORD }}>
       const form = document.querySelector("#login-form");
       const usernameInput = document.querySelector("#username");
       const passwordInput = document.querySelector("#password");
       const errorEl = document.querySelector("#login-error");
       const submitButton = document.querySelector("#login-submit");
+      const passwordToggle = document.querySelector("#password-toggle");
+      const demoStatus = document.querySelector("#demo-fill-status");
 
-      document.querySelectorAll(".demo-account-fill").forEach((button) => {
+      passwordToggle?.addEventListener("click", () => {
+        const showing = passwordInput.type === "text";
+        passwordInput.type = showing ? "password" : "text";
+        passwordToggle.textContent = showing ? "Show" : "Hide";
+        passwordToggle.setAttribute("aria-pressed", showing ? "false" : "true");
+        passwordToggle.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+      });
+
+      document.querySelectorAll(".login-demo-account").forEach((button) => {
         button.addEventListener("click", () => {
-          usernameInput.value = button.dataset.username ?? "";
+          const username = button.dataset.username ?? "";
+          usernameInput.value = username;
           passwordInput.value = demoPassword;
-          usernameInput.focus();
+          errorEl.textContent = "";
+          demoStatus.textContent = `Filled in ${button.dataset.label}'s demo credentials — press Sign in to continue.`;
+          submitButton.focus();
         });
       });
 
@@ -86,7 +193,7 @@ const DEMO_ACCOUNTS = [
         event.preventDefault();
         errorEl.textContent = "";
         submitButton.disabled = true;
-        submitButton.textContent = "Logging in…";
+        submitButton.textContent = "Signing in…";
 
         try {
           const res = await fetch("/api/login", {
@@ -101,7 +208,7 @@ const DEMO_ACCOUNTS = [
           if (!res.ok) {
             errorEl.textContent = "Incorrect username or password.";
             submitButton.disabled = false;
-            submitButton.textContent = "Log in";
+            submitButton.textContent = "Sign in";
             return;
           }
 
@@ -109,7 +216,7 @@ const DEMO_ACCOUNTS = [
         } catch {
           errorEl.textContent = "Network error — try again.";
           submitButton.disabled = false;
-          submitButton.textContent = "Log in";
+          submitButton.textContent = "Sign in";
         }
       });
     </script>
